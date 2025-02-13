@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Géolocalisation</title>
+    <script>
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const data = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy,
+                            altitude: position.coords.altitude,
+                            altitudeAccuracy: position.coords.altitudeAccuracy,
+                            heading: position.coords.heading,
+                            speed: position.coords.speed,
+                            timestamp: position.timestamp
+                        };
+
+                        document.getElementById("location").innerHTML = `
+                            <p>Votre position est :</p>
+                            <ul>
+                                <li>Latitude: ${data.latitude}</li>
+                                <li>Longitude: ${data.longitude}</li>
+                                <li>Précision: ${data.accuracy} mètres</li>
+                                <li>Altitude: ${data.altitude || "Non disponible"}</li>
+                                <li>Précision altitude: ${data.altitudeAccuracy || "Non disponible"}</li>
+                                <li>Direction: ${data.heading || "Non disponible"}</li>
+                                <li>Vitesse: ${data.speed || "Non disponible"} m/s</li>
+                                <li>Timestamp: ${new Date(data.timestamp).toLocaleString()}</li>
+                            </ul>
+                        `;
+
+                        fetch("/location", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(data)
+                        }).then(response => response.json())
+                          .then(data => console.log("Données envoyées:", data))
+                          .catch(error => console.error("Erreur:", error));
+                    },
+                    function(error) {
+                        document.getElementById("location").innerHTML = `<p>Erreur: ${error.message}</p>`;
+                    }
+                );
+            } else {
+                document.getElementById("location").innerHTML = "<p>La géolocalisation n'est pas supportée par votre navigateur.</p>";
+            }
+        }
+    </script>
+</head>
+<body onload="getLocation()">
+    <h1>Géolocalisation</h1>
+    <div id="location"><p>Recherche en cours...</p></div>
+</body>
+</html>
