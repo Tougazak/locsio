@@ -5,94 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Géolocalisation en Temps Réel avec Tracé</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        * {
-            box-sizing: border-box;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: #f4f4f4;
-            padding: 20px;
-            text-align: center;
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        form {
-            background: #fff;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-            display: inline-block;
-            margin-bottom: 15px;
-        }
-
-        label {
-            font-size: 16px;
-            font-weight: bold;
-            color: #555;
-            margin-right: 10px;
-        }
-
-        input {
-            width: 100px;
-            padding: 8px;
-            font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            text-align: center;
-        }
-
-        button {
-            background: #007BFF;
-            color: white;
-            padding: 8px 15px;
-            border: none;
-            font-size: 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.3s ease;
-        }
-
-        button:hover {
-            background: #0056b3;
-        }
-
-        #location {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-            margin: 15px auto;
-            max-width: 400px;
-            text-align: left;
-        }
-
-        #location ul {
-            list-style-type: none;
-            padding: 0;
-        }
-
-        #location li {
-            margin: 5px 0;
-            font-size: 14px;
-        }
-
-        #map {
-            height: 400px;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            border-radius: 10px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <h1>Géolocalisation en Temps Réel avec Tracé</h1>
@@ -103,16 +16,26 @@
         <button type="submit">Appliquer</button>
     </form>
 
-    <div id="location"><p>Recherche en cours...</p></div>
-    <div id="map"></div>
+    <div class="buttons">
+        <button id="startTracking">Démarrer</button>
+        <button id="stopTracking" class="stop" style="display:none;">Arrêter</button>
+        <button id="resumeTracking" style="display:none;">Reprendre</button>
+    </div>
+
+    <div class="container">
+        <div class="info-panel" id="location"><p>Recherche en cours...</p></div>
+        <div id="map"></div>
+    </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        let map = L.map('map').setView([48.8566, 2.3522], 13); // Coordonnées par défaut (Paris)
+        let map = L.map('map').setView([48.8566, 2.3522], 13);
         let marker;
-        let polyline = L.polyline([], { color: 'blue', weight: 4 }).addTo(map); // Tracé du parcours
-        let refreshInterval = 1000; // Intervalle par défaut
-        let intervalID;
+        let polyline = L.polyline([], { color: 'blue', weight: 4 }).addTo(map);
+        let refreshInterval = 1000;
+        let intervalID = null;
+        let isTracking = false;
+        let firstUpdate = true;
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
@@ -127,8 +50,6 @@
                             longitude: position.coords.longitude,
                             accuracy: position.coords.accuracy,
                             altitude: position.coords.altitude,
-                            altitudeAccuracy: position.coords.altitudeAccuracy,
-                            heading: position.coords.heading,
                             speed: position.coords.speed,
                             timestamp: position.timestamp
                         };
@@ -145,21 +66,19 @@
                             </ul>
                         `;
 
-                        // Mise à jour de la carte
                         let newLatLng = [data.latitude, data.longitude];
-
-                        // Ajouter le point au tracé
                         polyline.addLatLng(newLatLng);
 
-                        // Mise à jour du marqueur
                         if (!marker) {
                             marker = L.marker(newLatLng).addTo(map);
                         } else {
                             marker.setLatLng(newLatLng);
                         }
 
-                        map.setView(newLatLng, 15); // Recentre la carte sur la position
-
+                        if (firstUpdate) {
+                            map.setView(newLatLng, 15);
+                            firstUpdate = false;
+                        }
                     },
                     function(error) {
                         document.getElementById("location").innerHTML = `<p style="color:red;"><strong>Erreur:</strong> ${error.message}</p>`;
@@ -171,24 +90,59 @@
         }
 
         function startTracking() {
-            clearInterval(intervalID); // Supprime l'ancien intervalle
-            intervalID = setInterval(updateLocation, refreshInterval);
+            if (!isTracking) {
+                isTracking = true;
+                firstUpdate = true;
+                intervalID = setInterval(updateLocation, refreshInterval);
+                toggleButtons("start");
+            }
         }
+
+        function stopTracking() {
+            if (isTracking) {
+                clearInterval(intervalID);
+                isTracking = false;
+                toggleButtons("stop");
+            }
+        }
+
+        function resumeTracking() {
+            if (!isTracking) {
+                isTracking = true;
+                intervalID = setInterval(updateLocation, refreshInterval);
+                toggleButtons("resume");
+            }
+        }
+
+        function toggleButtons(state) {
+            if (state === "start" || state === "resume") {
+                document.getElementById("startTracking").style.display = "none";
+                document.getElementById("resumeTracking").style.display = "none";
+                document.getElementById("stopTracking").style.display = "inline-block"; // ✅ Correction ici
+            } else if (state === "stop") {
+                document.getElementById("stopTracking").style.display = "none";
+                document.getElementById("resumeTracking").style.display = "inline-block";
+            }
+        }
+
 
         document.getElementById("intervalForm").addEventListener("submit", function(event) {
             event.preventDefault();
             let newInterval = parseInt(document.getElementById("refreshRate").value, 10);
             if (!isNaN(newInterval) && newInterval >= 100) {
                 refreshInterval = newInterval;
-                startTracking();
+                if (isTracking) {
+                    clearInterval(intervalID);
+                    startTracking();
+                }
             } else {
                 alert("Veuillez entrer un nombre valide supérieur ou égal à 100 ms.");
             }
         });
 
-        // Démarrage initial
-        updateLocation();
-        startTracking();
+        document.getElementById("startTracking").addEventListener("click", startTracking);
+        document.getElementById("stopTracking").addEventListener("click", stopTracking);
+        document.getElementById("resumeTracking").addEventListener("click", resumeTracking);
     </script>
 </body>
 </html>
