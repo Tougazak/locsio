@@ -3,9 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Géolocalisation</title>
+    <title>Géolocalisation en Temps Réel avec Tracé</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #f4f4f4;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        form {
+            background: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-size: 16px;
+            font-weight: bold;
+            color: #555;
+            margin-right: 10px;
+        }
+
+        input {
+            width: 100px;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        button {
+            background: #007BFF;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s ease;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #location {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            margin: 15px auto;
+            max-width: 400px;
+            text-align: left;
+        }
+
+        #location ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #location li {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        #map {
+            height: 400px;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>Géolocalisation en Temps Réel avec Tracé</h1>
+
+    <form id="intervalForm">
+        <label for="refreshRate">Rafraîchissement (ms) :</label>
+        <input type="number" id="refreshRate" value="1000" min="100" step="100">
+        <button type="submit">Appliquer</button>
+    </form>
+
+    <div id="location"><p>Recherche en cours...</p></div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        function getLocation() {
+        let map = L.map('map').setView([48.8566, 2.3522], 13); // Coordonnées par défaut (Paris)
+        let marker;
+        let polyline = L.polyline([], { color: 'blue', weight: 4 }).addTo(map); // Tracé du parcours
+        let refreshInterval = 1000; // Intervalle par défaut
+        let intervalID;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        function updateLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
@@ -21,39 +134,61 @@
                         };
 
                         document.getElementById("location").innerHTML = `
-                            <p>Votre position est :</p>
+                            <p><strong>Votre position :</strong></p>
                             <ul>
-                                <li>Latitude: ${data.latitude}</li>
-                                <li>Longitude: ${data.longitude}</li>
-                                <li>Précision: ${data.accuracy} mètres</li>
-                                <li>Altitude: ${data.altitude || "Non disponible"}</li>
-                                <li>Précision altitude: ${data.altitudeAccuracy || "Non disponible"}</li>
-                                <li>Direction: ${data.heading || "Non disponible"}</li>
-                                <li>Vitesse: ${data.speed || "Non disponible"} m/s</li>
-                                <li>Timestamp: ${new Date(data.timestamp).toLocaleString()}</li>
+                                <li><strong>Latitude:</strong> ${data.latitude}</li>
+                                <li><strong>Longitude:</strong> ${data.longitude}</li>
+                                <li><strong>Précision:</strong> ${data.accuracy} mètres</li>
+                                <li><strong>Altitude:</strong> ${data.altitude || "Non disponible"}</li>
+                                <li><strong>Vitesse:</strong> ${data.speed || "Non disponible"} m/s</li>
+                                <li><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</li>
                             </ul>
                         `;
 
-                        fetch("/location", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(data)
-                        }).then(response => response.json())
-                          .then(data => console.log("Données envoyées:", data))
-                          .catch(error => console.error("Erreur:", error));
+                        // Mise à jour de la carte
+                        let newLatLng = [data.latitude, data.longitude];
+
+                        // Ajouter le point au tracé
+                        polyline.addLatLng(newLatLng);
+
+                        // Mise à jour du marqueur
+                        if (!marker) {
+                            marker = L.marker(newLatLng).addTo(map);
+                        } else {
+                            marker.setLatLng(newLatLng);
+                        }
+
+                        map.setView(newLatLng, 15); // Recentre la carte sur la position
+
                     },
                     function(error) {
-                        document.getElementById("location").innerHTML = `<p>Erreur: ${error.message}</p>`;
+                        document.getElementById("location").innerHTML = `<p style="color:red;"><strong>Erreur:</strong> ${error.message}</p>`;
                     }
                 );
             } else {
                 document.getElementById("location").innerHTML = "<p>La géolocalisation n'est pas supportée par votre navigateur.</p>";
             }
         }
+
+        function startTracking() {
+            clearInterval(intervalID); // Supprime l'ancien intervalle
+            intervalID = setInterval(updateLocation, refreshInterval);
+        }
+
+        document.getElementById("intervalForm").addEventListener("submit", function(event) {
+            event.preventDefault();
+            let newInterval = parseInt(document.getElementById("refreshRate").value, 10);
+            if (!isNaN(newInterval) && newInterval >= 100) {
+                refreshInterval = newInterval;
+                startTracking();
+            } else {
+                alert("Veuillez entrer un nombre valide supérieur ou égal à 100 ms.");
+            }
+        });
+
+        // Démarrage initial
+        updateLocation();
+        startTracking();
     </script>
-</head>
-<body onload="getLocation()">
-    <h1>Géolocalisation</h1>
-    <div id="location"><p>Recherche en cours...</p></div>
 </body>
 </html>
